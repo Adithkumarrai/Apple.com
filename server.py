@@ -17,6 +17,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from feature_engineering import prepare_csv_features
 from model_utils import SEQUENCE_LENGTH, ModelBundle, get_feature_names
 
 ROOT = Path(__file__).resolve().parent
@@ -101,12 +102,11 @@ async def predict_csv(
         raise HTTPException(400, "Upload a .csv file.")
 
     raw = pd.read_csv(io.BytesIO(await file.read()))
-    names = get_feature_names()
-    missing = [c for c in names if c not in raw.columns]
-    if missing:
-        raise HTTPException(400, f"Missing columns: {', '.join(missing)}")
+    try:
+        seq_df, msg = prepare_csv_features(raw)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
-    seq_df = raw[names].astype(float)
     row_df = seq_df.tail(1)
     lstm_ok = use_lstm and len(seq_df) >= SEQUENCE_LENGTH
 
@@ -125,6 +125,7 @@ async def predict_csv(
             "lstm": None,
             "ensemble": (rf + xgb) / 2,
             "rows_loaded": len(seq_df),
+            "message": msg,
         }
         if lstm_ok:
             lstm = bundle.predict_lstm(seq_df)

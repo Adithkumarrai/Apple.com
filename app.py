@@ -13,6 +13,7 @@ os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 import pandas as pd
 import streamlit as st
 
+from feature_engineering import prepare_csv_features
 from model_utils import SEQUENCE_LENGTH, ModelBundle, get_feature_names
 
 st.set_page_config(
@@ -78,17 +79,20 @@ def main() -> None:
     seq_df: pd.DataFrame | None = None
 
     with tab_csv:
-        st.caption(f"Columns required: {', '.join(names)}")
+        st.caption(
+            "Upload any stock CSV (Open, High, Low, Close) or a file that already "
+            "has the 12 feature columns."
+        )
         uploaded = st.file_uploader("Upload CSV", type=["csv"], label_visibility="collapsed")
         if uploaded:
-            raw = pd.read_csv(uploaded)
-            missing = [c for c in names if c not in raw.columns]
-            if missing:
-                st.error(f"Missing: {', '.join(missing)}")
+            try:
+                raw = pd.read_csv(uploaded)
+                seq_df, msg = prepare_csv_features(raw, names)
+                row_df = seq_df.tail(1)
+                st.success(msg)
+            except Exception as exc:
+                st.error(str(exc))
                 st.stop()
-            seq_df = raw[names].astype(float)
-            row_df = seq_df.tail(1)
-            st.caption(f"{len(seq_df)} rows loaded")
 
     with tab_manual:
         st.caption("Enter values in training scale (default 0).")
