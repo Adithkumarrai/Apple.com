@@ -1,6 +1,6 @@
-# Apple Stock Predictor (Website)
+# Apple Stock Predictor — Website only
 
-A simple **website** (HTML + FastAPI) instead of Streamlit.
+This project is a **website** (HTML + CSS + JavaScript), not a Streamlit app.
 
 ## Run locally
 
@@ -11,28 +11,16 @@ uvicorn server:app --reload
 
 Open **http://127.0.0.1:8000**
 
-## Deploy as a website (free)
+## Deploy online (Render)
 
-### Render (recommended)
+1. Connect [github.com/Adithkumarrai/Apple.com](https://github.com/Adithkumarrai/Apple.com)
+2. Start command: `uvicorn server:app --host 0.0.0.0 --port $PORT`
 
-1. Push this folder to GitHub.
-2. Go to [render.com](https://render.com) → **New Web Service** → connect your repo.
-3. **Start command:** `uvicorn server:app --host 0.0.0.0 --port $PORT`
-4. Deploy — you get a URL like `https://apple-predictor.onrender.com`
+## Files
 
-### Railway
-
-Same repo; start command: `uvicorn server:app --host 0.0.0.0 --port $PORT`
-
-## Project layout
-
-| Path | Role |
-|------|------|
-| `server.py` | API + serves the website |
-| `website/` | HTML, CSS, JavaScript |
+| File / folder | Purpose |
+|---------------|---------|
+| `server.py` | Backend API |
+| `website/` | Frontend (the website you see in the browser) |
 | `model_utils.py` | ML models |
 | `*.pkl`, `lstm_model.keras` | Saved models |
-
-## Old Streamlit app
-
-`app.py` is kept for reference. Use `server.py` for the website.
