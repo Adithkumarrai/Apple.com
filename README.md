@@ -1,26 +1,30 @@
-# Apple Stock Predictor — Website only
+# Apple Stock Predictor
 
-This project is a **website** (HTML + CSS + JavaScript), not a Streamlit app.
+Minimal **website-style** UI on **Streamlit Cloud**.
+
+## Deploy on Streamlit (recommended for you)
+
+1. Push this repo to GitHub: [github.com/Adithkumarrai/Apple.com](https://github.com/Adithkumarrai/Apple.com)
+2. Go to **[share.streamlit.io](https://share.streamlit.io)** → sign in with GitHub
+3. **Create app** → repository: `Adithkumarrai/Apple.com`
+4. **Main file path:** `app.py`
+5. **Deploy**
+
+Your public link will look like: `https://apple-com-xxxx.streamlit.app`
+
+First deploy can take **5–10 minutes** (TensorFlow install). Leave **Include LSTM** unchecked for faster predictions.
 
 ## Run locally
 
 ```bash
 pip install -r requirements.txt
-uvicorn server:app --reload
+streamlit run app.py
 ```
 
-Open **http://127.0.0.1:8000**
+## Also available (optional)
 
-## Deploy online (Render)
+- `server.py` + `website/` — standalone HTML site (Render / local uvicorn)
 
-1. Connect [github.com/Adithkumarrai/Apple.com](https://github.com/Adithkumarrai/Apple.com)
-2. Start command: `uvicorn server:app --host 0.0.0.0 --port $PORT`
+## Models
 
-## Files
-
-| File / folder | Purpose |
-|---------------|---------|
-| `server.py` | Backend API |
-| `website/` | Frontend (the website you see in the browser) |
-| `model_utils.py` | ML models |
-| `*.pkl`, `lstm_model.keras` | Saved models |
+`features.pkl`, `scaler.pkl`, `rf_model.pkl`, `xgb_model.pkl`, `lstm_model.keras`
