@@ -71,7 +71,7 @@ def main() -> None:
     )
 
     names = get_feature_names()
-    use_lstm = st.checkbox("Include LSTM (needs CSV with 30+ rows)", value=False)
+    use_lstm = st.checkbox("Include LSTM (slower)", value=False)
 
     tab_csv, tab_manual = st.tabs(["CSV upload", "Manual input"])
 
@@ -79,11 +79,7 @@ def main() -> None:
     seq_df: pd.DataFrame | None = None
 
     with tab_csv:
-        st.caption(
-            "Upload any stock CSV (Open, High, Low, Close) or a file that already "
-            "has the 12 feature columns."
-        )
-        uploaded = st.file_uploader("Upload CSV", type=["csv"], label_visibility="collapsed")
+        uploaded = st.file_uploader("Upload any CSV", type=["csv"], label_visibility="collapsed")
         if uploaded:
             try:
                 raw = pd.read_csv(uploaded)
@@ -115,7 +111,7 @@ def main() -> None:
 
         lstm_ok = use_lstm and seq_df is not None and len(seq_df) >= SEQUENCE_LENGTH
         if use_lstm and not lstm_ok:
-            st.warning(f"LSTM needs a CSV with at least {SEQUENCE_LENGTH} rows.")
+            st.warning(f"Need at least {SEQUENCE_LENGTH} rows in your CSV for LSTM.")
 
         try:
             msg = "Running…" + (" (first time may take 1–2 min)" if lstm_ok else "")

@@ -1,26 +1,11 @@
-"""Build model features from raw stock CSV or use existing feature columns."""
+"""Build model features from any uploaded CSV — no fixed column names required."""
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 from model_utils import get_feature_names
-
-# Common header aliases (after lowercasing)
-_OHLCV_ALIASES = {
-    "open": "open",
-    "high": "high",
-    "low": "low",
-    "close": "close",
-    "adj close": "close",
-    "adj_close": "close",
-    "adjclose": "close",
-    "price": "close",
-    "volume": "volume",
-    "date": "date",
-    "datetime": "date",
-    "timestamp": "date",
-}
 
 
 def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -32,84 +17,114 @@ def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
         ]
     else:
         out.columns = [str(c).strip().lower() for c in out.columns]
-
-    renamed = {}
-    for col in out.columns:
-        key = col.replace("_", " ").strip()
-        if key in _OHLCV_ALIASES:
-            renamed[col] = _OHLCV_ALIASES[key]
-        elif col in _OHLCV_ALIASES:
-            renamed[col] = _OHLCV_ALIASES[col]
-    if renamed:
-        out = out.rename(columns=renamed)
-    return out
+    drop = [c for c in out.columns if c.startswith("unnamed") or c in ("", "index")]
+    return out.drop(columns=drop, errors="ignore")
 
 
-def _pick_price_column(df: pd.DataFrame) -> str:
-    for name in ("close", "open", "high", "low"):
-        if name in df.columns:
-            return name
-    numeric = df.select_dtypes(include="number")
-    if numeric.empty:
-        raise ValueError("No numeric price columns found.")
-    return numeric.columns[-1]
+def _to_numeric_frame(df: pd.DataFrame) -> pd.DataFrame:
+    """Keep every column that is mostly numeric (any header names OK)."""
+    out = {}
+    for col in df.columns:
+        series = pd.to_numeric(df[col], errors="coerce")
+        if series.notna().sum() >= max(3, len(series) // 10):
+            out[str(col)] = series
+    if not out:
+        for col in df.columns:
+            series = pd.to_numeric(
+                df[col].astype(str).str.replace(",", "", regex=False),
+                errors="coerce",
+            )
+            if series.notna().any():
+                out[str(col)] = series
+    if not out:
+        raise ValueError("This file has no usable numeric data.")
+    return pd.DataFrame(out)
 
 
-def build_features_from_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
-    """Compute the 12 training features from OHLCV-style data."""
-    df = _normalize_columns(df)
+def _find_col(columns: list[str], patterns: tuple[str, ...]) -> str | None:
+    for col in columns:
+        for p in patterns:
+            if p in col or col == p:
+                return col
+    return None
 
-    if "close" not in df.columns:
-        price_col = _pick_price_column(df)
-        close = pd.to_numeric(df[price_col], errors="coerce")
+
+def _infer_prices(numeric: pd.DataFrame) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series]:
+    cols = list(numeric.columns)
+
+    close_key = _find_col(
+        cols,
+        ("adj close", "adjclose", "adj_close", "close", "closing", "price", "last"),
+    )
+    open_key = _find_col(cols, ("open", "opening", "o"))
+    high_key = _find_col(cols, ("high", "hi", "h"))
+    low_key = _find_col(cols, ("low", "lo", "l"))
+
+    if close_key is None:
+        # Use the numeric column with the largest typical values (usually price)
+        means = {c: numeric[c].mean(skipna=True) for c in cols}
+        close_key = max(means, key=lambda k: means[k] if pd.notna(means[k]) else -1)
+
+    close = numeric[close_key].astype(float)
+
+    if open_key and open_key in numeric:
+        open_ = numeric[open_key].astype(float)
     else:
-        close = pd.to_numeric(df["close"], errors="coerce")
+        open_ = close.shift(1).fillna(close)
 
-    open_ = pd.to_numeric(df["open"], errors="coerce") if "open" in df.columns else close
-    high = pd.to_numeric(df["high"], errors="coerce") if "high" in df.columns else close
-    low = pd.to_numeric(df["low"], errors="coerce") if "low" in df.columns else close
+    if high_key and high_key in numeric:
+        high = numeric[high_key].astype(float)
+    else:
+        high = pd.concat([open_, close], axis=1).max(axis=1)
+
+    if low_key and low_key in numeric:
+        low = numeric[low_key].astype(float)
+    else:
+        low = pd.concat([open_, close], axis=1).min(axis=1)
+
+    return open_, high, low, close
+
+
+def build_features_from_any(df: pd.DataFrame) -> pd.DataFrame:
+    df = _normalize_columns(df)
+    numeric = _to_numeric_frame(df)
+    open_, high, low, close = _infer_prices(numeric)
 
     ret = close.pct_change()
-    safe_close = close.replace(0, pd.NA)
+    safe = close.replace(0, np.nan)
 
     features = pd.DataFrame(
         {
             "momentum_3": close.pct_change(3),
             "momentum_5": close.pct_change(5),
             "momentum_10": close.pct_change(10),
-            "volatility_5": ret.rolling(5).std(),
-            "volatility_10": ret.rolling(10).std(),
-            "hl_range": (high - low) / safe_close,
-            "oc_range": (open_ - close) / safe_close,
-            "rolling_mean_5": close.rolling(5).mean(),
-            "rolling_std_5": close.rolling(5).std(),
+            "volatility_5": ret.rolling(5, min_periods=2).std(),
+            "volatility_10": ret.rolling(10, min_periods=3).std(),
+            "hl_range": (high - low) / safe,
+            "oc_range": (open_ - close) / safe,
+            "rolling_mean_5": close.rolling(5, min_periods=1).mean(),
+            "rolling_std_5": close.rolling(5, min_periods=2).std(),
             "lag_1": ret.shift(1),
             "lag_2": ret.shift(2),
             "lag_3": ret.shift(3),
         }
     )
-    return features.dropna()
+    features = features.replace([np.inf, -np.inf], np.nan).bfill().ffill().fillna(0)
+    return features
 
 
-def prepare_csv_features(raw: pd.DataFrame, feature_names: list[str] | None = None) -> tuple[pd.DataFrame, str]:
-    """
-    Accept either:
-    - CSV that already has the 12 model features, or
-    - Any stock CSV with Open/High/Low/Close (names flexible).
-
-    Returns (feature dataframe, message for UI).
-    """
+def prepare_csv_features(
+    raw: pd.DataFrame, feature_names: list[str] | None = None
+) -> tuple[pd.DataFrame, str]:
     names = feature_names or get_feature_names()
     raw = _normalize_columns(raw)
 
     if all(n in raw.columns for n in names):
-        out = raw[names].astype(float).dropna()
-        return out, f"Using {len(out)} rows (features already in file)."
+        out = raw[names].apply(pd.to_numeric, errors="coerce").dropna()
+        if len(out) > 0:
+            return out, f"Ready — {len(out)} rows."
 
-    out = build_features_from_ohlcv(raw)
-    if len(out) == 0:
-        raise ValueError(
-            "Could not build features. Use a CSV with columns like "
-            "Date, Open, High, Low, Close — or the 12 feature columns."
-        )
-    return out, f"Built features from your data ({len(out)} rows)."
+    out = build_features_from_any(raw)
+    if len(out) < 1:
+        raise ValueError("Not enough rows in this file to predict.")
+    return out, f"Ready — {len(out)} rows from your file."
