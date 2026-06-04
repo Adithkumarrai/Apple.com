@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Apple Predictor</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <h1>Apple predictor</h1>
+      <p class="sub">Random Forest · XGBoost · LSTM</p>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button type="button" class="tab active" data-tab="manual">Manual</button>
+      <button type="button" class="tab" data-tab="csv">CSV upload</button>
+    </nav>
+
+    <section id="panel-manual" class="panel active">
+      <p class="hint">Enter feature values (same scale as training).</p>
+      <form id="manual-form" class="grid"></form>
+    </section>
+
+    <section id="panel-csv" class="panel">
+      <p class="hint">CSV must include all 12 feature columns. Use 30+ rows for LSTM.</p>
+      <input type="file" id="csv-file" accept=".csv" />
+    </section>
+
+    <label class="check">
+      <input type="checkbox" id="use-lstm" />
+      Include LSTM (slower, needs 30+ rows)
+    </label>
+
+    <button type="button" id="predict-btn" class="btn">Predict</button>
+    <p id="status" class="status" aria-live="polite"></p>
+
+    <section id="results" class="results hidden">
+      <h2>Results</h2>
+      <div id="cards"></div>
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
