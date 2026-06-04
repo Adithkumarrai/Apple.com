@@ -1,0 +1,2 @@
+# Helps Streamlit Cloud install faster on Linux
+build-essential
